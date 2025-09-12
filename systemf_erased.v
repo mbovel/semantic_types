@@ -538,3 +538,124 @@ Proof.
   - (* ttabs *) eauto using sem_typed_tabs.
   - (* ttapp *) eauto using sem_typed_tapp.
 Qed.
+
+
+(*** Examples ***)
+
+(* Basic boolean example *)
+Example ex_bool:
+  typeof [] (tbool true) = Some TBool.
+Proof. reflexivity. Qed.
+
+Example ex_bool_eval:
+  eval 10 [] (tbool true) = Some (Some (vbool true)).
+Proof. reflexivity. Qed.
+
+(* Identity function: \x:Bool. x *)
+Example ex_id_bool:
+  typeof [] (tabs TBool (tvar 0)) = Some (TFun TBool TBool).
+Proof. reflexivity. Qed.
+
+Example ex_id_bool_eval:
+  eval 10 [] (tabs TBool (tvar 0)) = Some (Some (vabs [] (tvar 0))).
+Proof. reflexivity. Qed.
+
+(* Application of identity function: (\x:Bool. x) true *)
+Example ex_id_app:
+  typeof [] (tapp (tabs TBool (tvar 0)) (tbool true)) = Some TBool.
+Proof. reflexivity. Qed.
+
+Example ex_id_app_eval:
+  eval 10 [] (tapp (tabs TBool (tvar 0)) (tbool true)) = Some (Some (vbool true)).
+Proof. reflexivity. Qed.
+
+(* Polymorphic identity function: /\X. \x:X. x *)
+Example ex_poly_id:
+  typeof [] (ttabs (tabs (TVar 0) (tvar 0))) = Some (TForall (TFun (TVar 0) (TVar 0))).
+Proof. reflexivity. Qed.
+
+Example ex_poly_id_eval:
+  eval 10 [] (ttabs (tabs (TVar 0) (tvar 0))) = Some (Some (vtabs [] (tabs (TVar 0) (tvar 0)))).
+Proof. reflexivity. Qed.
+
+(* Type application of polymorphic identity: (/\X. \x:X. x)[Bool] *)
+Example ex_poly_id_tapp:
+  typeof [] (ttapp (ttabs (tabs (TVar 0) (tvar 0))) TBool) = Some (TFun TBool TBool).
+Proof. reflexivity. Qed.
+
+Example ex_poly_id_tapp_eval:
+  eval 10 [] (ttapp (ttabs (tabs (TVar 0) (tvar 0))) TBool) = Some (Some (vabs [] (tvar 0))).
+Proof. reflexivity. Qed.
+
+(* Full application: (/\X. \x:X. x)[Bool] true *)
+Example ex_poly_id_full:
+  typeof [] (tapp (ttapp (ttabs (tabs (TVar 0) (tvar 0))) TBool) (tbool true)) = Some TBool.
+Proof. reflexivity. Qed.
+
+Example ex_poly_id_full_eval:
+  eval 10 [] (tapp (ttapp (ttabs (tabs (TVar 0) (tvar 0))) TBool) (tbool true)) = Some (Some (vbool true)).
+Proof. reflexivity. Qed.
+
+(* Higher-order function: \f:(Bool -> Bool). \x:Bool. f x *)
+Example ex_hof:
+  typeof [] (tabs (TFun TBool TBool) (tabs TBool (tapp (tvar 1) (tvar 0)))) = 
+  Some (TFun (TFun TBool TBool) (TFun TBool TBool)).
+Proof. reflexivity. Qed.
+
+(* Polymorphic compose function: /\A./\B./\C. \f:B->C. \g:A->B. \x:A. f(g x) *)
+Example ex_compose:
+  typeof [] 
+    (ttabs (ttabs (ttabs 
+      (tabs (TFun (TVar 1) (TVar 2)) 
+        (tabs (TFun (TVar 2) (TVar 1)) 
+          (tabs (TVar 2) 
+            (tapp (tvar 2) (tapp (tvar 1) (tvar 0))))))))) = 
+  Some (TForall (TForall (TForall 
+    (TFun (TFun (TVar 1) (TVar 2)) 
+      (TFun (TFun (TVar 2) (TVar 1)) 
+        (TFun (TVar 2) (TVar 2))))))).
+Proof. reflexivity. Qed.
+
+(* Church boolean true: /\A. \x:A. \y:A. x *)
+Example ex_church_true:
+  typeof []
+    (ttabs (tabs (TVar 0) (tabs (TVar 0) (tvar 1)))) =
+  Some (TForall (TFun (TVar 0) (TFun (TVar 0) (TVar 0)))).
+Proof. reflexivity. Qed.
+
+(* Church boolean false: /\A. \x:A. \y:A. y *)
+Example ex_church_false:
+  typeof []
+    (ttabs (tabs (TVar 0) (tabs (TVar 0) (tvar 0)))) =
+  Some (TForall (TFun (TVar 0) (TFun (TVar 0) (TVar 0)))).
+Proof. reflexivity. Qed.
+
+(* Using Church true with Bool: (/\A. \x:A. \y:A. x)[Bool] true false *)
+Example ex_church_true_app:
+  typeof []
+    (tapp (tapp (ttapp (ttabs (tabs (TVar 0) (tabs (TVar 0) (tvar 1)))) TBool) 
+                       (tbool true)) 
+               (tbool false)) = 
+  Some TBool.
+Proof. reflexivity. Qed.
+
+Example ex_church_true_app_eval:
+  eval 20 []
+    (tapp (tapp (ttapp (ttabs (tabs (TVar 0) (tabs (TVar 0) (tvar 1)))) TBool) 
+                       (tbool true)) 
+               (tbool false)) = 
+  Some (Some (vbool true)).
+Proof. reflexivity. Qed.
+
+(* Nested polymorphism: /\A. \f:(/\B. B -> A). f[A] *)
+Example ex_nested_poly:
+  typeof []
+    (ttabs (tabs (TForall (TFun (TVar 0) (TVar 1))) 
+                 (ttapp (tvar 0) (TVar 0)))) =
+  Some (TForall (TFun (TForall (TFun (TVar 0) (TVar 1))) (TFun (TVar 0) (TVar 0)))).
+Proof. reflexivity. Qed.
+
+(* Type error example: applying function to wrong type *)
+Example ex_type_error:
+  typeof [] (tapp (tabs TBool (tvar 0)) (tabs TBool (tvar 0))) = None.
+Proof. reflexivity. Qed.
