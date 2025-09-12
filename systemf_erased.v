@@ -523,7 +523,7 @@ Fixpoint typeof (tenv: TyEnv) (t: Term) : option Ty :=
   end.
 
 
-(*** Full safety theorem: if a term is algorihtmically typed, it is also
+(*** Full safety theorem: if a term is algorithmically typed, it is also
 semantically typed; meaning evaluating it will not get stuck nor return an
 error, and the returned value will be in the interpretation of its syntactic
 type. ***)
