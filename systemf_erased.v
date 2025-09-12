@@ -159,14 +159,14 @@ Ltac injects :=
   | [ H: _ = _ |- _ ] => injection H; clear H; intros; subst
   end.
 
-Ltac crush_match :=
-  repeat match goal with
-  | H : context [match ?x with _ => _ end] |- _ =>
-      destruct x eqn:?; injects; try discriminate; auto
-  | |- context [match ?x with _ => _ end] =>
-      destruct x eqn:?; injects; try discriminate; auto
-  end.
+Ltac destruct_single x :=
+  destruct x eqn:?; try discriminate; try lia; injects; eauto; let n:= numgoals in guard n < 2.
 
+Ltac destruct_match :=
+  match goal with
+  | H : context [match ?x with _ => _ end] |- _ => destruct_single x
+  | |- context [match ?x with _ => _ end] => destruct_single x
+  end.
 
 (*** List lemmas ***)
 (* Could add these to the Coq standard library? *)
@@ -207,25 +207,7 @@ Proof.
   induction fuel1; intros; try discriminate.
   destruct fuel2; try lia.
   assert (fuel1 <= fuel2) by lia.
-  destruct t; auto; simpl in H0; simpl.
-  - (* tapp *) 
-    destruct (eval fuel1 env t1) eqn:Heval1; try discriminate.
-    apply IHfuel1 with (fuel2 := fuel2) in Heval1; auto.
-    rewrite Heval1.
-    destruct o; injects; try reflexivity.
-    destruct v; injects; try reflexivity.
-    destruct (eval fuel1 env t2) eqn:Heval2; try discriminate.
-    apply IHfuel1 with (fuel2 := fuel2) in Heval2; auto.
-    rewrite Heval2.
-    destruct o; injects; try reflexivity.
-    apply IHfuel1 with (fuel2 := fuel2) in H0; auto.
-  - (* ttapp *)
-    destruct (eval fuel1 env t) eqn:Heval; try discriminate.
-    apply IHfuel1 with (fuel2 := fuel2) in Heval; auto.
-    rewrite Heval.
-    destruct o; injects; try reflexivity.
-    destruct v; injects; try reflexivity.
-    apply IHfuel1 with (fuel2 := fuel2) in H0; auto.
+  destruct t; auto; simpl in *; repeat (repeat destruct_match; erewrite IHfuel1; eauto).
 Qed.
 
 
@@ -275,8 +257,9 @@ Proof.
   induction m as [|m IH]; intros; asimpl in *.
   - auto using Nat.sub_0_r.
   - unfold upn, up.
-    destruct x; simpl; try reflexivity.
-    rewrite IH.
+    destruct x; try reflexivity.
+    simpl.
+    erewrite IH.
     destruct (lt_dec x m), (lt_dec (S x) (S m)); simpl; try lia; autosubst.
 Qed.
 
@@ -295,18 +278,18 @@ Lemma interp_weaken: forall T tenv1 tenv2 tenv3,
   interp (tenv1 ++ tenv3) T =
   interp (tenv1 ++ tenv2 ++ tenv3) T.[upn (length tenv1) (ren (+ length tenv2))].
 Proof.
-  intros T.
   induction T as [n| |A IHA B IHB|B IHB]; intros tenv1 tenv2 tenv3; simpl; try reflexivity.
   - (* TVar *)
     rewrite iter_up.
     destruct (lt_dec _ _); simpl; unfold interp_var.
     + repeat rewrite nth_error_app1; auto.
     + repeat rewrite nth_error_app2; try lia.
-      assert ((length tenv1 + (length tenv2 + (n - length tenv1)) - length tenv1 - length tenv2) = n - length tenv1) by lia.
-      rewrite H.
+      replace ((length tenv1 + (length tenv2 + (n - length tenv1)) - length tenv1 - length tenv2)) with (n - length tenv1) by lia.
       reflexivity.
-  - f_equal; eauto using functional_extensionality.
-  - f_equal; eauto using functional_extensionality.
+  - (* TFun *)
+    f_equal; eauto using functional_extensionality.
+  - (* TForall *)
+    f_equal.
     apply functional_extensionality.
     intros U'.
     apply IHB with (tenv1:=U'::tenv1).
@@ -341,15 +324,12 @@ Proof.
         rewrite upn_rename.
         reflexivity.
       * (* n <> length tenv1 *)
-        assert (n > 0) by lia.
         destruct n; try lia.
-        assert ((S n - length tenv1) = S (n - length tenv1)) by lia.
-        rewrite H0.
+        replace (S n - length tenv1) with (S (n - length tenv1)) by lia.
         simpl.
         unfold interp_var.
         rewrite <- nth_error_app2; try lia.
-        assert ((length tenv1) + (n - length tenv1) = n) by lia.
-        rewrite H1.
+        replace (length tenv1 + (n - length tenv1)) with (n) by lia.
         reflexivity.
   - f_equal; eauto using functional_extensionality.
   - f_equal; eauto using functional_extensionality.
@@ -383,8 +363,7 @@ Definition sem_typed (tenv: TyEnv) (t: Term) (T: Ty) : Prop :=
 Lemma sem_typed_bool: forall tenv b,
   sem_typed tenv (tbool b) TBool.
 Proof.
-  intros.
-  intros env tenv' Henv.
+  intros ** env tenv' Henv.
   exists (vbool b), 1. simpl.
   split; try reflexivity.
   exists b. reflexivity.
@@ -394,8 +373,7 @@ Lemma sem_typed_var: forall tenv i T,
   nth_error tenv i = Some T ->
   sem_typed tenv (tvar i) T.
 Proof.
-  intros.
-  intros env tenv' Henv.
+  intros ** env tenv' Henv.
   eapply Forall2_exists2 in H; eauto.
   destruct H as [v [Hnth Hty]].
   exists v, 1. simpl.
@@ -408,8 +386,7 @@ Lemma sem_typed_abs: forall tenv A b B,
   sem_typed (A::tenv) b B ->
   sem_typed tenv (tabs A b) (TFun A B).
 Proof.
-  intros.
-  intros env tenv' Henv.
+  intros ** env tenv' Henv.
   exists (vabs env b), 1. simpl.
   split; try reflexivity.
   exists env, b. split; auto.
@@ -423,19 +400,16 @@ Lemma sem_typed_app: forall tenv f a A B,
   sem_typed tenv a A ->
   sem_typed tenv (tapp f a) B.
 Proof.
-  intros.
-  intros env tenv' Henv.
+  intros ** env tenv' Henv.
   destruct (H env tenv' Henv) as [vf [fuelf [Hevalf Hf]]].
   destruct (H0 env tenv' Henv) as [va [fuela [Hevala Ha]]].
   destruct Hf as [envf [body [Hvf Hf]]].
-  specialize (Hf va Ha).
-  destruct Hf as [v [fuelt [Hevalt Hty]]].
-  exists v, (S (fuelf + fuela + fuelt)).
-  simpl.
-  rewrite eval_mono with (fuel1 := fuelf) (fuel2 := fuelf + fuela + fuelt) (r := Some vf); try lia; auto.
-  rewrite eval_mono with (fuel1 := fuela) (fuel2 := fuelf + fuela + fuelt) (r := Some va); try lia; auto.
+  destruct (Hf va Ha) as [v [fuelt [Hevalt Hty]]].
+  exists v, (S (fuelf + fuela + fuelt)); simpl.
+  rewrite eval_mono with (fuel1 := fuelf) (r := Some vf); try lia; auto.
+  rewrite eval_mono with (fuel1 := fuela) (r := Some va); try lia; auto.
   rewrite Hvf.
-  rewrite eval_mono with (fuel1 := fuelt) (fuel2 := fuelf + fuela + fuelt) (r := Some v); try lia; auto.
+  rewrite eval_mono with (fuel1 := fuelt) (r := Some v); try lia; auto.
 Qed.
 
 Definition tenv_incr (types: TyEnv): TyEnv :=
@@ -446,42 +420,32 @@ Lemma env_incr_wf: forall tenv env tenv' T',
   wf_env (tenv_incr tenv) env (T' :: tenv').
 Proof.
   intros.
-  unfold wf_env in *.
   induction H; constructor; auto.
-  rewrite <- interp_env_ren with (T := x) (T' := T'); auto.
+  erewrite <- interp_env_ren; auto.
 Qed.
 
 Lemma sem_typed_tabs: forall tenv b A,
   sem_typed (tenv_incr tenv) b A ->
   sem_typed tenv (ttabs b) (TForall A).
 Proof.
-  intros.
-  intros env.
-  unfold sem_typed, interp_forall in *.
-  exists (vtabs env b), 1. simpl.
-  split; try reflexivity.
-  unfold interp_forall.
-  exists env, b. split; auto.
-  intros Arg.
-  eapply H.
-  eapply env_incr_wf; eauto.
+  intros ** env tenv' Henv.
+  exists (vtabs env b), 1; simpl; split; auto.
+  exists env, b; split; auto.
+  auto using H, env_incr_wf.
 Qed.
 
 Lemma sem_typed_tapp: forall tenv f A B,
   sem_typed tenv f (TForall B) ->
   sem_typed tenv (ttapp f A) (B.[A/]).
 Proof.
-  intros.
-  intros env tenv' Henv.
+  intros ** env tenv' Henv.
   destruct (H env tenv' Henv) as [vf [fuelf [Hevalf Hf]]].
   destruct Hf as [envf [body [Hvf Hf]]].
-  specialize (Hf (interp tenv' A)).
-  destruct Hf as [v [fuelt [Hevalt Hty]]].
-  exists v, (S (fuelf + fuelt)).
-  simpl.
-  rewrite eval_mono with (fuel1 := fuelf) (fuel2 := fuelf + fuelt) (r := Some vf); try lia; auto.
+  destruct (Hf (interp tenv' A)) as [v [fuelt [Hevalt Hty]]].
+  exists v, (S (fuelf + fuelt)); simpl.
+  rewrite eval_mono with (fuel1 := fuelf) (r := Some vf); try lia; auto.
   rewrite Hvf.
-  rewrite eval_mono with (fuel1 := fuelt) (fuel2 := fuelf + fuelt) (r := Some v); try lia; auto.
+  rewrite eval_mono with (fuel1 := fuelt) (r := Some v); try lia; auto.
   split; try reflexivity.
   rewrite <- interp_subst; auto.
 Qed.
@@ -530,7 +494,7 @@ type. ***)
 Theorem full_safety: forall t T tenv,
   typeof tenv t = Some T -> sem_typed tenv t T.
 Proof.
-  induction t; intros; simpl in *; injects; crush_match; subst.
+  induction t; intros; simpl in *; injects; repeat destruct_match; subst.
   - (* tbool *) eauto using sem_typed_bool.
   - (* tvar  *) eauto using sem_typed_var.
   - (* tabs  *) eauto using sem_typed_abs.
