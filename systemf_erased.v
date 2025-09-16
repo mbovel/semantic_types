@@ -1,9 +1,9 @@
-Require Import Coq.Lists.List.
+From Stdlib Require Import Lists.List.
 Import ListNotations.
-Require Import Coq.Arith.PeanoNat.
-Require Import Coq.Logic.FunctionalExtensionality.
-Require Import Coq.Arith.Compare_dec.
-Require Import Psatz.
+From Stdlib Require Import Arith.PeanoNat.
+From Stdlib Require Import Logic.FunctionalExtensionality.
+From Stdlib Require Import Arith.Compare_dec.
+From Stdlib Require Import Psatz.
 Require Import Autosubst.Autosubst.
 
 Global Hint Extern 1000 => lia : lia.
