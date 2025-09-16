@@ -1,0 +1,29 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup OCaml
+      uses: ocaml/setup-ocaml@v3
+      with:
+        ocaml-compiler: 5
+    
+    - name: Install Rocq and autosubst
+      run: |
+        opam repo add rocq-released https://rocq-prover.org/opam/released
+        opam install coq coq-autosubst -y
+        
+    - name: Run make
+      run: |
+        eval $(opam env)
+        make
